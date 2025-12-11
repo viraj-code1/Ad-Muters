@@ -12,7 +12,7 @@
     };
 
     const CONSTANTS = {
-        AD_SPEED: 64,
+        AD_SPEED: 16.0,
         NORMAL_SPEED: 1.0,
         SPEED_THRESHOLD: 2.0,
         CHECK_INTERVAL: 1000,
