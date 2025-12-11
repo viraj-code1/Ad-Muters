@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Ad-Muter for OTT",
+  "version": "1.0.0",
+  "description": "Automatically mutes ads on YouTube, JioHotstar, and Amazon Prime Video.",
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.hotstar.com/*",
+    "*://*.primevideo.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["src/utils.js", "src/youtube.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["*://*.hotstar.com/*"],
+      "js": ["src/utils.js", "src/hotstar.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["*://*.primevideo.com/*"],
+      "js": ["src/utils.js", "src/prime.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
