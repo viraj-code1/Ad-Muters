@@ -11,6 +11,15 @@
         adSlot: '.ytp-ad-module'
     };
 
+    const CONSTANTS = {
+        AD_SPEED: 16.0,
+        NORMAL_SPEED: 1.0,
+        SPEED_THRESHOLD: 2.0,
+        CHECK_INTERVAL: 1000,
+        THROTTLE_MS: 50,
+        INIT_RETRY: 1000
+    };
+
     // State
     let state = {
         enabled: true,
@@ -79,7 +88,7 @@
 
         if (!player) {
             // Player not ready, retry shortly
-            setTimeout(startObserving, 1000);
+            setTimeout(startObserving, CONSTANTS.INIT_RETRY);
             return;
         }
 
@@ -87,7 +96,7 @@
         let lastRun = 0;
         state.observer = new MutationObserver((mutations) => {
             const now = Date.now();
-            if (now - lastRun > 50) { // Max run every 50ms
+            if (now - lastRun > CONSTANTS.THROTTLE_MS) { // Max run every 50ms
                 checkForAds();
                 lastRun = now;
             }
@@ -101,7 +110,7 @@
         });
 
         // Backup Interval
-        state.interval = setInterval(checkForAds, 1000);
+        state.interval = setInterval(checkForAds, CONSTANTS.CHECK_INTERVAL);
 
         Utils.log("Monitoring started.");
     }
@@ -131,9 +140,9 @@
         }
 
         // Ad Speedup (16x) - Only log if we are actually changing it
-        if (video.playbackRate < 16) {
+        if (video.playbackRate < CONSTANTS.AD_SPEED) {
             // Utils.log("Speeding up ad to 16x..."); // Reduced log spam
-            video.playbackRate = 16.0;
+            video.playbackRate = CONSTANTS.AD_SPEED;
         }
 
         if (state.autoSkip) {
@@ -148,21 +157,38 @@
         }
 
         // Restore Playback Speed
-        if (video.playbackRate > 2.0) {
+        if (video.playbackRate > CONSTANTS.SPEED_THRESHOLD) {
             // Utils.log("Restoring playback speed to 1x."); // Reduced log spam
-            video.playbackRate = 1.0;
+            video.playbackRate = CONSTANTS.NORMAL_SPEED;
         }
     }
 
     function attemptSkip() {
-        const skipButtons = document.querySelectorAll(YT_SELECTORS.skipButton);
+        // Strategy 1: CSS Selectors
+        let skipButtons = Array.from(document.querySelectorAll(YT_SELECTORS.skipButton));
+
+        // Strategy 2: Text Content Fallback (generic robust check)
+        if (skipButtons.length === 0) {
+            const allButtons = document.querySelectorAll('button, div[role="button"]');
+            for (const btn of allButtons) {
+                if (btn.innerText && (btn.innerText.includes('Skip') || btn.innerText.includes('Skip Ad'))) {
+                    skipButtons.push(btn);
+                }
+            }
+        }
+
         const closeOverlay = document.querySelectorAll(YT_SELECTORS.overlay);
 
         // Click Skip Buttons
-        for (const btn of skipButtons) {
-            if (btn && btn.offsetParent !== null) { // Visible check
-                Utils.log("Skip button found. Clicking...");
-                triggerClick(btn);
+        if (skipButtons.length > 0) {
+            for (const btn of skipButtons) {
+                if (btn && (btn.offsetParent !== null || btn.style.display !== 'none')) { // Robust visibility check
+                    Utils.log("Skip button found. Clicking...");
+                    triggerClick(btn);
+                    return; // Click one is usually enough
+                } else {
+                    Utils.log("Skip button found but hidden.");
+                }
             }
         }
 
