@@ -1,44 +1,52 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ad-Muter Settings</title>
   <link rel="stylesheet" href="popup.css">
 </head>
+
 <body>
   <div class="container">
     <div class="header">
       <img src="../icons/icon48.png" alt="Logo" class="logo">
       <h1>Ad-Muter</h1>
     </div>
-    
+
     <div class="controls">
       <div class="control-item">
         <label for="toggle-all">Enable Globally</label>
         <input type="checkbox" id="toggle-all" checked>
       </div>
-      
+
+      <div class="control-item">
+        <label for="toggle-autoskip">Auto Skip Ads</label>
+        <input type="checkbox" id="toggle-autoskip" checked>
+      </div>
+
       <hr>
-      
+
       <div class="control-item">
         <label for="toggle-youtube">YouTube</label>
         <input type="checkbox" id="toggle-youtube" checked>
       </div>
-      
+
       <div class="control-item">
         <label for="toggle-hotstar">JioHotstar</label>
         <input type="checkbox" id="toggle-hotstar" checked>
       </div>
-      
+
       <div class="control-item">
         <label for="toggle-prime">Amazon Prime</label>
         <input type="checkbox" id="toggle-prime" checked>
       </div>
     </div>
-    
+
     <div class="status" id="status-msg"></div>
   </div>
   <script src="popup.js"></script>
 </body>
+
 </html>

@@ -4,7 +4,7 @@ const AP_SELECTORS = {
     // Prime Video is also complex. 
     // Selectors for ad UI elements:
     adMarker: '.adMarker',
-    skipButton: '.atvwebplayersdk-ad-skip-button, .adSkipButton',
+    skipButton: '.atvwebplayersdk-ad-skip-button, .adSkipButton, .f1o51m5e-atv-interactive-ads-container',
     timeLeft: '.atvwebplayersdk-ad-time-left',
     video: 'video'
 };
@@ -12,21 +12,21 @@ const AP_SELECTORS = {
 async function initPrimeMuter() {
     const isEnabled = await Utils.isExtensionEnabled();
 
-    chrome.storage.local.get(['prime'], (result) => {
+    chrome.storage.local.get(['prime', 'autoskip'], (result) => {
         if (result.prime !== false) {
             Utils.log("Prime Muter Initialized");
-            startObservingAP();
+            startObservingAP(result.autoskip !== false);
         } else {
             Utils.log("Prime Muter Disabled via Settings");
         }
     });
 }
 
-function startObservingAP() {
-    setInterval(checkForAdsAP, 1000);
+function startObservingAP(autoSkipEnabled) {
+    setInterval(() => checkForAdsAP(autoSkipEnabled), 800);
 }
 
-function checkForAdsAP() {
+function checkForAdsAP(autoSkipEnabled = true) {
     const video = document.querySelector('video');
     if (!video) return;
 
@@ -34,8 +34,8 @@ function checkForAdsAP() {
     const skipBtn = document.querySelector(AP_SELECTORS.skipButton);
     const timeLeft = document.querySelector(AP_SELECTORS.timeLeft);
 
-    // Sometimes Prime changes the class names but keeps structure.
-    // We can look for text "Skip" or "Ad" in elements overlapping the video.
+    // sometimes "Skip" text query is useful
+    // const skipByText = Array.from(document.querySelectorAll('button')).find(el => el.textContent === 'Skip');
 
     const isAdShowing = !!skipBtn || !!timeLeft;
 
@@ -46,9 +46,10 @@ function checkForAdsAP() {
         }
 
         // Auto-skip logic
-        if (skipBtn) {
+        if (autoSkipEnabled && skipBtn) {
             Utils.log("Prime Skip button found. Clicking...");
             skipBtn.click();
+            Utils.log("Prime ad skipped.");
         }
     } else {
         if (video.muted) {

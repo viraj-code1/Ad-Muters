@@ -1,94 +1,196 @@
-// YouTube Ad Muter Logic
+(() => {
+    // YouTube Ad Muter Logic (Refactored)
 
-const YT_SELECTORS = {
-    player: '#movie_player',
-    adModule: '.ytp-ad-module',
-    adShowing: '.ad-showing',
-    video: 'video.html5-main-video',
-    skipButton: '.ytp-ad-skip-button'
-};
+    const YT_SELECTORS = {
+        player: '#movie_player',
+        adModule: '.ytp-ad-module',
+        adShowing: '.ad-showing',
+        video: 'video.html5-main-video',
+        skipButton: '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .videoAdUiSkipButton, .ytp-skip-ad-button',
+        overlay: '.ytp-ad-overlay-close-button',
+        adSlot: '.ytp-ad-module'
+    };
 
-let observer = null;
-let adInterval = null;
+    // State
+    let state = {
+        enabled: true,
+        autoSkip: true,
+        observer: null,
+        interval: null
+    };
 
-async function initYouTubeMuter() {
-    const isEnabled = await Utils.isExtensionEnabled();
-    // We also need to check specific YouTube toggle if we implement granular control reading
-    // For now assuming Utils.isExtensionEnabled checks global, but we should check 'youtube' key too.
+    async function init() {
+        // Initial Settings Load
+        const result = await new Promise(resolve => {
+            chrome.storage.local.get(['youtube', 'autoskip'], resolve);
+        });
 
-    chrome.storage.local.get(['youtube'], (result) => {
-        if (result.youtube !== false) { // Default true
-            Utils.log("YouTube Muter Initialized");
+        state.enabled = result.youtube !== false; // Default true
+        state.autoSkip = result.autoskip !== false; // Default true
+
+        Utils.log(`YouTube Muter Initialized. Enabled: ${state.enabled}, AutoSkip: ${state.autoSkip}`);
+
+        if (state.enabled) {
             startObserving();
-        } else {
-            Utils.log("YouTube Muter Disabled via Settings");
         }
-    });
-}
 
-function startObserving() {
-    const player = document.querySelector(YT_SELECTORS.player);
+        // Dynamic Settings Listener
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace !== 'local') return;
 
-    if (!player) {
-        // Player might not be loaded yet, retry
-        setTimeout(startObserving, 1000);
-        return;
+            if (changes.youtube) {
+                state.enabled = changes.youtube.newValue !== false;
+                Utils.log(`YouTube Enabled Changed: ${state.enabled}`);
+                toggleSystem();
+            }
+
+            if (changes.autoskip) {
+                state.autoSkip = changes.autoskip.newValue !== false;
+                Utils.log(`AutoSkip Changed: ${state.autoSkip}`);
+            }
+        });
     }
 
-    // Use MutationObserver for robust detection
-    observer = new MutationObserver((mutations) => {
-        checkForAds();
-    });
+    function toggleSystem() {
+        if (state.enabled) {
+            startObserving();
+        } else {
+            stopObserving();
+        }
+    }
 
-    observer.observe(player, {
-        attributes: true,
-        attributeFilter: ['class'],
-        childList: true,
-        subtree: true
-    });
+    function stopObserving() {
+        if (state.observer) {
+            state.observer.disconnect();
+            state.observer = null;
+        }
+        if (state.interval) {
+            clearInterval(state.interval);
+            state.interval = null;
+        }
+        Utils.log("Monitoring stopped.");
+    }
 
-    // Backup interval just in case MutationObserver misses something or for fallback
-    adInterval = setInterval(checkForAds, 1000);
-}
+    function startObserving() {
+        // Clean up previous instances first
+        stopObserving();
 
-function checkForAds() {
-    const player = document.querySelector(YT_SELECTORS.player);
-    const video = document.querySelector(YT_SELECTORS.video);
+        const player = document.querySelector(YT_SELECTORS.player);
 
-    if (!player || !video) return;
+        if (!player) {
+            // Player not ready, retry shortly
+            setTimeout(startObserving, 1000);
+            return;
+        }
 
-    const isAdShowing = player.classList.contains('ad-showing') ||
-        document.querySelector(YT_SELECTORS.adModule)?.children.length > 0;
+        // Mutation Observer
+        let lastRun = 0;
+        state.observer = new MutationObserver((mutations) => {
+            const now = Date.now();
+            if (now - lastRun > 50) { // Max run every 50ms
+                checkForAds();
+                lastRun = now;
+            }
+        });
 
-    if (isAdShowing) {
+        state.observer.observe(player, {
+            attributes: true,
+            attributeFilter: ['class'],
+            childList: true,
+            subtree: true
+        });
+
+        // Backup Interval
+        state.interval = setInterval(checkForAds, 1000);
+
+        Utils.log("Monitoring started.");
+    }
+
+    function checkForAds() {
+        if (!state.enabled) return;
+
+        const player = document.querySelector(YT_SELECTORS.player);
+        const video = document.querySelector(YT_SELECTORS.video);
+
+        if (!player || !video) return;
+
+        const isAdShowing = player.classList.contains('ad-showing') ||
+            (document.querySelector(YT_SELECTORS.adModule)?.children.length > 0);
+
+        if (isAdShowing) {
+            handleAdStart(video);
+        } else {
+            handleAdEnd(video);
+        }
+    }
+
+    function handleAdStart(video) {
         if (!video.muted) {
             Utils.log("Ad detected! Muting...");
             Utils.mute(video);
         }
 
-        // Auto-skip attempt
-        const skipBtn = document.querySelector(YT_SELECTORS.skipButton);
-        if (skipBtn) {
-            Utils.log("Skip button found. Clicking...");
-            skipBtn.click();
+        // Ad Speedup (16x) - Only log if we are actually changing it
+        if (video.playbackRate < 16) {
+            // Utils.log("Speeding up ad to 16x..."); // Reduced log spam
+            video.playbackRate = 16.0;
         }
-    } else {
+
+        if (state.autoSkip) {
+            attemptSkip();
+        }
+    }
+
+    function handleAdEnd(video) {
         if (video.muted) {
-            // Only unmute if WE muted it? 
-            // For simplicity, we unmute if ad is gone and it's muted. 
-            // A better approach tracks state, but this usually works okay for "mute ads" features.
-            // To be safer, we could store 'preAdVolume' state.
             Utils.log("Ad ended. Unmuting...");
             Utils.unmute(video);
         }
+
+        // Restore Playback Speed
+        if (video.playbackRate > 2.0) {
+            // Utils.log("Restoring playback speed to 1x."); // Reduced log spam
+            video.playbackRate = 1.0;
+        }
     }
-}
 
-// Watch for navigation events (SPA navigation)
-/*
-  YouTube is an SPA, so full page reloads don't always happen.
-  However, the content script usually stays injected in the context.
-  The startObserving logic usually attaches to the persistent player element.
-*/
+    function attemptSkip() {
+        const skipButtons = document.querySelectorAll(YT_SELECTORS.skipButton);
+        const closeOverlay = document.querySelectorAll(YT_SELECTORS.overlay);
 
-initYouTubeMuter();
+        // Click Skip Buttons
+        for (const btn of skipButtons) {
+            if (btn && btn.offsetParent !== null) { // Visible check
+                Utils.log("Skip button found. Clicking...");
+                triggerClick(btn);
+            }
+        }
+
+        // Close Overlays
+        for (const btn of closeOverlay) {
+            if (btn && btn.offsetParent !== null) {
+                triggerClick(btn);
+            }
+        }
+    }
+
+    function triggerClick(element) {
+        if (!element) return;
+
+        element.click();
+
+        const mouseEvents = ['mousedown', 'mouseup', 'click'];
+        mouseEvents.forEach(eventType => {
+            const event = new MouseEvent(eventType, {
+                bubbles: true,
+                cancelable: true,
+                view: window
+            });
+            element.dispatchEvent(event);
+        });
+        Utils.log("Skip action triggered.");
+    }
+
+    // Start
+    init();
+})();

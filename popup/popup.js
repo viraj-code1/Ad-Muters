@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const toggles = {
         'enabled': document.getElementById('toggle-all'),
+        'autoskip': document.getElementById('toggle-autoskip'),
         'youtube': document.getElementById('toggle-youtube'),
         'hotstar': document.getElementById('toggle-hotstar'),
         'prime': document.getElementById('toggle-prime')
