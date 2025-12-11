@@ -6,13 +6,13 @@
         adModule: '.ytp-ad-module',
         adShowing: '.ad-showing',
         video: 'video.html5-main-video',
-        skipButton: '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .videoAdUiSkipButton, .ytp-skip-ad-button',
+        skipButton: '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .videoAdUiSkipButton, .ytp-skip-ad-button, #ytp-skip-ad-button',
         overlay: '.ytp-ad-overlay-close-button',
         adSlot: '.ytp-ad-module'
     };
 
     const CONSTANTS = {
-        AD_SPEED: 16.0,
+        AD_SPEED: 64,
         NORMAL_SPEED: 1.0,
         SPEED_THRESHOLD: 2.0,
         CHECK_INTERVAL: 1000,
@@ -167,7 +167,7 @@
         // Strategy 1: CSS Selectors
         let skipButtons = Array.from(document.querySelectorAll(YT_SELECTORS.skipButton));
 
-        // Strategy 2: Text Content Fallback (generic robust check)
+        // Strategy 2: Text Content Fallback
         if (skipButtons.length === 0) {
             const allButtons = document.querySelectorAll('button, div[role="button"]');
             for (const btn of allButtons) {
@@ -177,22 +177,27 @@
             }
         }
 
-        const closeOverlay = document.querySelectorAll(YT_SELECTORS.overlay);
-
-        // Click Skip Buttons
         if (skipButtons.length > 0) {
             for (const btn of skipButtons) {
-                if (btn && (btn.offsetParent !== null || btn.style.display !== 'none')) { // Robust visibility check
-                    Utils.log("Skip button found. Clicking...");
+                // Debug Log Button State
+                const styles = window.getComputedStyle(btn);
+                Utils.log(`[Debug] Found Button: Class="${btn.className}", ID="${btn.id}", Text="${btn.innerText}"`);
+                Utils.log(`[Debug] State: Visible=${btn.offsetParent !== null}, Disabled=${btn.disabled}, PointerEvents=${styles.pointerEvents}, Opacity=${styles.opacity}, Z-Index=${styles.zIndex}`);
+
+                if (btn && (btn.offsetParent !== null || btn.style.display !== 'none')) {
+                    Utils.log("Skip button deemed clickable. Triggering...");
                     triggerClick(btn);
-                    return; // Click one is usually enough
+                    return;
                 } else {
-                    Utils.log("Skip button found but hidden.");
+                    Utils.log("Skip button found but considered hidden/inactive.");
                 }
             }
+        } else {
+            Utils.log("No skip buttons found."); // spammy
         }
 
         // Close Overlays
+        const closeOverlay = document.querySelectorAll(YT_SELECTORS.overlay);
         for (const btn of closeOverlay) {
             if (btn && btn.offsetParent !== null) {
                 triggerClick(btn);
@@ -203,18 +208,71 @@
     function triggerClick(element) {
         if (!element) return;
 
-        element.click();
+        const rect = element.getBoundingClientRect();
+        const clientX = rect.left + rect.width / 2;
+        const clientY = rect.top + rect.height / 2;
 
-        const mouseEvents = ['mousedown', 'mouseup', 'click'];
-        mouseEvents.forEach(eventType => {
-            const event = new MouseEvent(eventType, {
+        Utils.log(`[Debug] Triggering Skip at ${Math.round(clientX)},${Math.round(clientY)}`);
+
+        // 1. Native Click on Element
+        try { element.click(); } catch (e) { }
+
+        // 2. Click Parent (often the listener is on the container)
+        if (element.parentElement) {
+            try { element.parentElement.click(); } catch (e) { }
+        }
+
+        // 3. Simulated Events (Pointer/Mouse)
+        const eventTypes = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
+
+        eventTypes.forEach(eventType => {
+            const options = {
                 bubbles: true,
                 cancelable: true,
-                view: window
-            });
+                composed: true, // Crucial for Shadow DOM
+                view: window,
+                detail: 1,
+                screenX: clientX,
+                screenY: clientY,
+                clientX: clientX,
+                clientY: clientY,
+                ctrlKey: false,
+                altKey: false,
+                shiftKey: false,
+                metaKey: false,
+                button: 0,
+                buttons: 1
+            };
+
+            let event;
+            if (eventType.startsWith('pointer')) {
+                event = new PointerEvent(eventType, options);
+            } else {
+                event = new MouseEvent(eventType, options);
+            }
+
             element.dispatchEvent(event);
         });
-        Utils.log("Skip action triggered.");
+
+        Utils.log(`[Debug] Events dispatched.`);
+
+        // 4. "Nuclear Option": Force video to end if UI fail
+        // We only do this if we are SURE it's a skip button (which we are, to get here)
+        const video = document.querySelector('video');
+        if (video && !isNaN(video.duration) && video.duration > 0) {
+            Utils.log(`[Nuclear] Forcing Ad End: currentTime=${video.currentTime} -> ${video.duration}`);
+            video.currentTime = video.duration + 1;
+        }
+
+        // 5. Verification
+        setTimeout(() => {
+            // Check if the button is still valid, visible, and attached
+            if (element && element.offsetParent !== null && document.contains(element)) {
+                Utils.log("[Result] Skip Failed? Button still visible.");
+            } else {
+                Utils.log("[Result] Skip Successful! Button disappeared.");
+            }
+        }, 500);
     }
 
     // Start

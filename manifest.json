@@ -1,16 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Ad-Muter for OTT",
+  "name": "Ad-Muter and Skipper for YouTube",
   "version": "1.0.0",
-  "description": "Automatically mutes ads on YouTube, JioHotstar, and Amazon Prime Video.",
+  "description": "Automatically mutes ads on YouTube.",
   "permissions": [
     "storage",
     "scripting"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
-    "*://*.hotstar.com/*",
-    "*://*.primevideo.com/*"
+    "*://*.youtube.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -29,16 +27,6 @@
     {
       "matches": ["*://*.youtube.com/*"],
       "js": ["src/utils.js", "src/youtube.js"],
-      "run_at": "document_end"
-    },
-    {
-      "matches": ["*://*.hotstar.com/*"],
-      "js": ["src/utils.js", "src/hotstar.js"],
-      "run_at": "document_end"
-    },
-    {
-      "matches": ["*://*.primevideo.com/*"],
-      "js": ["src/utils.js", "src/prime.js"],
       "run_at": "document_end"
     }
   ]
